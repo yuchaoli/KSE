@@ -37,7 +37,7 @@ python train.py --net resnet56 --pretrained True --checkpoint pth/resnet56.pth -
 ##### DensetNet-40 (G=5, T=0)
 
 ```shell
-python train.py --net densenet40 --pretrained True --checkpoint pth/densenet40.pth --train_dir tmp/densenet40_G5T0 --train_batch_size 64 --learning_rate 0.01 --epochs 200 --schedule 100 --G 5 --T 0 
+python train.py --net densenet40 --pretrained True --checkpoint pth/densenet40.pth --train_dir tmp/densenet40_G5T0 --train_batch_size 128 --learning_rate 0.01 --epochs 200 --schedule 100 --G 5 --T 0 
 ```
 
 ### Test
