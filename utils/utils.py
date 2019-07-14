@@ -352,5 +352,5 @@ class Conv2d_KSE(nn.Module):
         self.__delattr__("group_size")
         self.__delattr__("cluster_num")
         self.__delattr__("weight")
-        if self.bias:
+        if self.bias is not None:
             self.__delattr__("bias")
