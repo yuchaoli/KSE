@@ -9,7 +9,7 @@ from utils.utils import Conv2d_KSE
 
 def _weights_init(m):
     if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
-        init.kaiming_normal(m.weight)
+        init.kaiming_normal_(m.weight)
 
 
 class LambdaLayer(nn.Module):
@@ -61,7 +61,7 @@ class ResNet(nn.Module):
         self.in_planes = 16
 
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
-        init.kaiming_normal(self.conv1.weight)
+        init.kaiming_normal_(self.conv1.weight)
 
         self.bn1 = nn.BatchNorm2d(16)
 
@@ -70,7 +70,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
 
         self.linear = nn.Linear(64, num_classes)
-        init.kaiming_normal(self.linear.weight)
+        init.kaiming_normal_(self.linear.weight)
 
         self.apply(_weights_init)
 

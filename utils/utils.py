@@ -180,7 +180,7 @@ class Conv2d_KSE(nn.Module):
             clusters = []
             indexs = []
             for c in range(cluster_weight.shape[0]):
-                kmean = KMeans(n_clusters=self.cluster_num[g]).fit(cluster_weight[c])
+                kmean = KMeans(n_clusters=self.cluster_num[g], n_init=10).fit(cluster_weight[c])
                 centroids = kmean.cluster_centers_
                 assignments = kmean.labels_
 
