@@ -12,29 +12,78 @@ import pdb
 
 from utils import base, models
 
-parser = argparse.ArgumentParser(description='KSE Experiments')
-parser.add_argument('--dataset', dest='dataset', help='training dataset', default='cifar10', type=str)
-parser.add_argument('--net', dest='net', help='training network', default='resnet56', type=str)
-parser.add_argument('--pretrained', dest='pretrained', help='whether use pretrained model', default=False, type=bool)
-parser.add_argument('--checkpoint', dest='checkpoint', help='checkpoint dir', default=None, type=str)
-parser.add_argument('--train_dir', dest='train_dir', help='training data dir', default="tmp", type=str)
-parser.add_argument('--save_best', dest='save_best', help='whether only save best model', default=True, type=bool)
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-parser.add_argument('--train_batch_size', dest='train_batch_size', help='training batch size', default=64, type=int)
-parser.add_argument('--test_batch_size', dest='test_batch_size', help='test batch size', default=50, type=int)
-parser.add_argument('--gpus', dest='gpus', help='gpu id',default=[0], type=int,nargs='+')
+# parser = argparse.ArgumentParser(description='KSE Experiments')
+# parser.add_argument('--dataset', dest='dataset', help='training dataset', default='cifar10', type=str)
+# parser.add_argument('--net', dest='net', help='training network', default='resnet56', type=str)
+# parser.add_argument('--pretrained', dest='pretrained', help='whether use pretrained model', default=False, type=bool)
+# parser.add_argument('--checkpoint', dest='checkpoint', help='checkpoint dir', default=None, type=str)
+# parser.add_argument('--train_dir', dest='train_dir', help='training data dir', default="tmp", type=str)
+# parser.add_argument('--save_best', dest='save_best', help='whether only save best model', default=True, type=bool)
 
-parser.add_argument('--learning_rate', dest='learning_rate', help='learning rate', default=0.01, type=float)
-parser.add_argument('--momentum', dest='momentum', help='momentum', default=0.9, type=float)
-parser.add_argument('--weight_decay', dest='weight_decay', help='weight decay', default=1e-5, type=float)
-parser.add_argument('--epochs', dest='epochs', help='epochs', default=200, type=int)
-parser.add_argument('--schedule', dest='schedule', help='Decrease learning rate',default=[100, 150],type=int,nargs='+')
-parser.add_argument('--gamma', dest='gamma', help='gamma', default=0.1, type=float)
+# parser.add_argument('--train_batch_size', dest='train_batch_size', help='training batch size', default=64, type=int)
+# parser.add_argument('--test_batch_size', dest='test_batch_size', help='test batch size', default=50, type=int)
+# parser.add_argument('--gpus', dest='gpus', help='gpu id',default=[0], type=int,nargs='+')
 
-parser.add_argument('--G', dest='G', help='G', default=None, type=int)
-parser.add_argument('--T', dest='T', help='T', default=None, type=int)
+# parser.add_argument('--learning_rate', dest='learning_rate', help='learning rate', default=0.01, type=float)
+# parser.add_argument('--momentum', dest='momentum', help='momentum', default=0.9, type=float)
+# parser.add_argument('--weight_decay', dest='weight_decay', help='weight decay', default=1e-5, type=float)
+# parser.add_argument('--epochs', dest='epochs', help='epochs', default=200, type=int)
+# parser.add_argument('--schedule', dest='schedule', help='Decrease learning rate',default=[100, 150],type=int,nargs='+')
+# parser.add_argument('--gamma', dest='gamma', help='gamma', default=0.1, type=float)
 
-args = parser.parse_args()
+# parser.add_argument('--G', dest='G', help='G', default=None, type=int)
+# parser.add_argument('--T', dest='T', help='T', default=None, type=int)
+
+# args = parser.parse_args()
+
+
+# opt = {
+#     'dataset': 'cifar10',
+#     'net': 'densenet40',
+#     'pretrained': False, # True,
+#     'checkpoint': None, # 'pth/densenet40.pth',
+#     'train_dir': 'tmp/densenet40_NONE',
+#     'save_best': True,
+#     'train_batch_size': 128,
+#     'test_batch_size': 50,
+#     'gpus': [0],
+#     'learning_rate': 0.01,
+#     'momentum': 0.9,
+#     'weight_decay': 1e-5,
+#     'epochs': 2, #200,
+#     'schedule': [100],
+#     'gamma': 0.1,
+#     'G': None, # 5,
+#     'T': None # 0
+# }
+
+opt = {
+    'dataset': 'cifar10',
+    'net': 'densenet40',
+    'pretrained': True,
+    'checkpoint': 'pth/densenet40.pth',
+    'train_dir': 'tmp/densenet40_TEST',
+    'save_best': True,
+    'train_batch_size': 128,
+    'test_batch_size': 50,
+    'gpus': [0],
+    'learning_rate': 0.01,
+    'momentum': 0.9,
+    'weight_decay': 1e-5,
+    'epochs': 2,
+    'schedule': [100],
+    'gamma': 0.1,
+    'G': 5,
+    'T': 0
+}
+
+args = dotdict(opt)
 
 if __name__ == "__main__":
     model = importlib.import_module("model.model_deploy").__dict__[args.net](args.pretrained, args.checkpoint)

@@ -235,6 +235,7 @@ class Conv2d_KSE(nn.Module):
 
         else:
             self.channels_indexs.data = torch.LongTensor(all_indexs)
+            print(len(all_indexs))
             self.channel_indexs = []
             for g in range(1, self.G - 1):
                 if self.group_size[g] == 0:

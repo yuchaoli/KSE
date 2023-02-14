@@ -9,6 +9,8 @@ from utils.utils import Conv2d_KSE
 __all__ = ['densenet']
 
 
+# Conv2d_KSE = nn.Conv2d
+
 class Bottleneck(nn.Module):
     def __init__(self, inplanes, expansion=4, growthRate=12, dropRate=0):
         super(Bottleneck, self).__init__()
