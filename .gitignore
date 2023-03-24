@@ -1,4 +1,4 @@
 /data
 /tmp
 /runs
-*/__pycache__/
+**/__pycache__/

@@ -126,7 +126,7 @@ class Conv2d_KSE(nn.Module):
                 mask[i] = self.G - 1
                 self.group_size[-1] += 1
             else:
-                mask[i] = math.floor(indicator[i] * self.G)
+                mask[i] = math.floor(indicator[i] * self.G) # should be ceil??
                 self.group_size[int(math.floor(indicator[i] * self.G))] += 1
 
         for i in range(self.G):
@@ -142,6 +142,18 @@ class Conv2d_KSE(nn.Module):
         # For kernel number = N: use full_weight rather than cluster&index
         self.full_weight = nn.Parameter(torch.Tensor(
             self.output_channels, self.group_size[-1], self.kernel_size, self.kernel_size),requires_grad=True)
+        
+        # save pruning info
+        a = np.array(self.group_size)
+        b = np.array(self.cluster_num)
+        c = (a*b).sum()/(a.sum()*b[-1])
+        with open('info.txt', 'a+') as f:
+            f.write('{:.2f}%\t{}\t{}\n'.format(
+                c*100,
+                self.input_channels,
+                self.output_channels
+            ))
+        #
 
         for g in range(1, self.G - 1):
             if self.group_size[g] == 0:
@@ -235,7 +247,6 @@ class Conv2d_KSE(nn.Module):
 
         else:
             self.channels_indexs.data = torch.LongTensor(all_indexs)
-            print(len(all_indexs))
             self.channel_indexs = []
             for g in range(1, self.G - 1):
                 if self.group_size[g] == 0:
@@ -245,6 +256,8 @@ class Conv2d_KSE(nn.Module):
                     (index.data + self.cluster_num[g] * torch.Tensor(
                         [i for i in range(self.group_size[g])]).view(1, -1)).view(-1).long(),
                     requires_grad=False))
+                
+        return len(all_indexs), self.input_channels
 
     def create_arch(self, G=None, T=None):
         if G is not None:
@@ -353,5 +366,5 @@ class Conv2d_KSE(nn.Module):
         self.__delattr__("group_size")
         self.__delattr__("cluster_num")
         self.__delattr__("weight")
-        if self.bias is not None:
-            self.__delattr__("bias")
+        # if self.bias is not None:
+        #     self.__delattr__("bias")

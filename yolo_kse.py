@@ -1,70 +1,28 @@
 # coding: utf-8
 import os
 os.environ["OMP_NUM_THREADS"] = '1'
-import math
 
 import torch
 import torch.nn as nn
+
+import yaml
 import argparse
 import importlib
 import copy
 from tensorboardX import SummaryWriter
 import pdb
 from fvcore.nn import FlopCountAnalysis, parameter_count_table
-from thop import profile, clever_format
 
 from utils import base, models
+from models.yolo import Model
+from utils.general import check_dataset
+from utils.utils import Conv2d_KSE
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
-
-# parser = argparse.ArgumentParser(description='KSE Experiments')
-# parser.add_argument('--dataset', dest='dataset', help='training dataset', default='cifar10', type=str)
-# parser.add_argument('--net', dest='net', help='training network', default='resnet56', type=str)
-# parser.add_argument('--pretrained', dest='pretrained', help='whether use pretrained model', default=False, type=bool)
-# parser.add_argument('--checkpoint', dest='checkpoint', help='checkpoint dir', default=None, type=str)
-# parser.add_argument('--train_dir', dest='train_dir', help='training data dir', default="tmp", type=str)
-# parser.add_argument('--save_best', dest='save_best', help='whether only save best model', default=True, type=bool)
-
-# parser.add_argument('--train_batch_size', dest='train_batch_size', help='training batch size', default=64, type=int)
-# parser.add_argument('--test_batch_size', dest='test_batch_size', help='test batch size', default=50, type=int)
-# parser.add_argument('--gpus', dest='gpus', help='gpu id',default=[0], type=int,nargs='+')
-
-# parser.add_argument('--learning_rate', dest='learning_rate', help='learning rate', default=0.01, type=float)
-# parser.add_argument('--momentum', dest='momentum', help='momentum', default=0.9, type=float)
-# parser.add_argument('--weight_decay', dest='weight_decay', help='weight decay', default=1e-5, type=float)
-# parser.add_argument('--epochs', dest='epochs', help='epochs', default=200, type=int)
-# parser.add_argument('--schedule', dest='schedule', help='Decrease learning rate',default=[100, 150],type=int,nargs='+')
-# parser.add_argument('--gamma', dest='gamma', help='gamma', default=0.1, type=float)
-
-# parser.add_argument('--G', dest='G', help='G', default=None, type=int)
-# parser.add_argument('--T', dest='T', help='T', default=None, type=int)
-
-# args = parser.parse_args()
-
-
-# opt = {
-#     'dataset': 'cifar10',
-#     'net': 'densenet40',
-#     'pretrained': False, # True,
-#     'checkpoint': None, # 'pth/densenet40.pth',
-#     'train_dir': 'tmp/densenet40_NONE',
-#     'save_best': True,
-#     'train_batch_size': 128,
-#     'test_batch_size': 50,
-#     'gpus': [0],
-#     'learning_rate': 0.01,
-#     'momentum': 0.9,
-#     'weight_decay': 1e-5,
-#     'epochs': 2, #200,
-#     'schedule': [100],
-#     'gamma': 0.1,
-#     'G': None, # 5,
-#     'T': None # 0
-# }
 
 opt = {
     'dataset': 'cifar10',
@@ -82,37 +40,73 @@ opt = {
     'epochs': 2,
     'schedule': [100],
     'gamma': 0.1,
-    'G': 2,
+    'G': 1,
     'T': 0
 }
 
 args = dotdict(opt)
 
+batch_size = 16
+num_workers = 4
+epochs = 2
+img_size = [640, 640]
+
+data = './data/coco.yaml'
+hyp = './data/hyp.scratch.tiny.yaml'
+weights = './yolov7-tiny.pt'
+# cfg = 'cfg/training/yolov7-tiny.yaml'
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+cuda = device.type != 'cpu'
+plots = True
+
 if __name__ == "__main__":
-    model = importlib.import_module("model.model_deploy").__dict__[args.net](args.pretrained, args.checkpoint)
+    # check data
+    with open(hyp) as f:
+        hyp = yaml.load(f, Loader=yaml.SafeLoader)
+    with open(data) as f:
+        data_dict = yaml.load(f, Loader=yaml.SafeLoader)
+    check_dataset(data_dict)
+
+    train_path = data_dict['train']
+    test_path = data_dict['val']
+
+    nc = int(data_dict['nc'])
+    names = data_dict['names']
+
+    # load model
+    ckpt = torch.load(weights, map_location=device) # = {'model', 'optimizer', 'training_results', 'epoch'}
+    state_dict = ckpt['model'].float().state_dict()
+    model = Model(ckpt['model'].yaml, nc=nc, anchors=hyp.get('anchors')).to(device)
+    model.load_state_dict(state_dict, strict=False)
+    del ckpt, state_dict
     
+    # KSE
+    n_kse_layers = sum(isinstance(module, Conv2d_KSE) for module in model.modules())
+    models.KSE(model, args.G, args.T, n_kse_layers)
+    print('KSE finished')
+
+    # network forward init
+    a, b = models.forward_init(model)
+
+    input = torch.randn(2, 3, 32, 32).cuda()
+    model.cuda()
+    y = model(input)
+    print(y)
+
+    print('{:.2f}% of channels remaining'.format(a/b*100))
+    
+    # summary(model, (128, 3, 32, 32))
+    input = torch.randn(2, 3, 32, 32).cuda()
+    flops = FlopCountAnalysis(model, input)
+    print('Total FLOPs: {}M'.format(round(flops.by_module()[''] / 1e6)))
+    print(parameter_count_table(model))
+    exit()
+
     train_loader, test_loader = importlib.import_module("dataset."+args.dataset).__dict__["load_data"](
         args.train_batch_size, args.test_batch_size)
 
     writer = SummaryWriter(args.train_dir)
 
-    # KSE
-    models.KSE(model, args.G, args.T)
-    print('KSE finished')
-
-    # network forward init
-    a, b = models.forward_init(model)
-    for n, p in model.named_parameters():
-        if p.requires_grad:
-            print(n)
-    exit()
-    print('{:.2f}% of channels remaining'.format(a/b*100))
-    # summary(model, (128, 3, 32, 32))
-    input = torch.randn(1, 3, 32, 32)
-    flops = FlopCountAnalysis(model, input)
-    print('Total FLOPs: {}M'.format(round(flops.by_module()[''] / 1e6)))
-    print(parameter_count_table(model))
-    
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(filter(lambda i: i.requires_grad, model.parameters()), args.learning_rate,
                                 momentum=args.momentum, weight_decay=args.weight_decay)

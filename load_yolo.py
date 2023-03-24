@@ -194,9 +194,9 @@ if __name__ == '__main__':
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})
     optimizer.add_param_group({'params': pg2})
     del pg0, pg1, pg2
-
+    
     ema = ModelEMA(model)
-
+    
     start_epoch = 0
     best_fitness = 0.0
 
