@@ -1,4 +1,5 @@
 /data
 /tmp
 /runs
+/gitignore
 **/__pycache__/

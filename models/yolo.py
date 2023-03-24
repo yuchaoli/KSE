@@ -8,12 +8,12 @@ logger = logging.getLogger(__name__)
 import torch
 from models.common import *
 from models.experimental import *
-from utils.autoanchor import check_anchor_order
-from utils.general import make_divisible, check_file, set_logging
-from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
+from utils_yolo.autoanchor import check_anchor_order
+from utils_yolo.general import make_divisible, check_file, set_logging
+from utils_yolo.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
     select_device, copy_attr
-from utils.loss import SigmoidBin
-from utils.utils import Conv2d_KSE
+from utils_yolo.loss import SigmoidBin
+from utils_kse.utils import Conv2d_KSE
 
 try:
     import thop  # for FLOPS computation
