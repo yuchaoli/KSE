@@ -41,6 +41,7 @@ G = 3
 T = 0
 
 # training params
+epochs = 1
 batch_size = 16
 num_workers = 4
 img_size = [640, 640]
@@ -101,7 +102,6 @@ if __name__ == "__main__":
     # train loop
     start_epoch = 0
     best_fitness = 0.0
-    epochs = 2
     print(('%10s' * 7) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels'))
     for epoch in range(epochs):
         model.train()
@@ -144,16 +144,16 @@ if __name__ == "__main__":
         # end batch
 
         # validation
-        results, maps, times = test(
-            data_dict,
-            batch_size=batch_size * 2,
-            imgsz=imgsz_test,
-            model=model,
-            dataloader=testloader,
-            save_dir=save_dir,
-            compute_loss=compute_loss,
-            is_coco=True
-        )
+        # results, maps, times = test(
+        #     data_dict,
+        #     batch_size=batch_size * 2,
+        #     imgsz=imgsz_test,
+        #     model=model,
+        #     dataloader=testloader,
+        #     save_dir=save_dir,
+        #     compute_loss=compute_loss,
+        #     is_coco=True
+        # )
 
         # write results to file
         with open(results_file, 'a') as f:
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     
     # test best.pth
     for m in (last, best) if best.exists() else (last):  # speed, mAP tests
-        results, _, _ = test(
+        results, _, _, stats = test(
             data_dict,
             batch_size=batch_size * 2,
             imgsz=imgsz_test,
@@ -188,6 +188,6 @@ if __name__ == "__main__":
             plots=False,
             is_coco=True
         )
-    
+        print(stats)
     torch.cuda.empty_cache()
 #

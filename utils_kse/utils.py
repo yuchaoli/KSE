@@ -193,6 +193,105 @@ class Conv2d_KSE(nn.Module):
 
             self.__getattr__("clusters_"+str(g)).data = torch.Tensor(clusters)
             self.__getattr__("indexs_"+str(g)).data = torch.Tensor(indexs)
+    
+    def KSE_torch(self, G=None, T=None):
+        if G is not None:
+            self.G = G
+        if T is not None:
+            self.T = T
+        weight = self.weight.detach().clone()
+        
+        # Calculate channels KSE indicator.
+        weight = weight.permute(1, 0, 2, 3).reshape(self.input_channels, self.output_channels, -1)
+        ks_weight = torch.sum(torch.linalg.norm(weight, ord=1, axis=2), 1)
+        ke_weight = density_entropy(weight.reshape(self.output_channels, self.input_channels, -1).cpu().numpy())
+        ke_weight = torch.tensor(ke_weight).cuda()
+        ks_weight = (ks_weight - torch.min(ks_weight)) / (torch.max(ks_weight) - torch.min(ks_weight))
+        ke_weight = (ke_weight - torch.min(ke_weight)) / (torch.max(ke_weight) - torch.min(ke_weight))
+        indicator = torch.sqrt(ks_weight / (1 + ke_weight))
+        indicator = (indicator - torch.min(indicator))/(torch.max(indicator) - torch.min(indicator))
+
+        # Calculate each input channels kernel number and split them into different groups.
+        # Each group has same kernel number.
+        mask = torch.zeros(self.input_channels)
+        self.group_size = [0 for i in range(self.G)]
+        self.cluster_num = [1 for i in range(self.G)]
+
+        for i in range(self.input_channels):
+            if math.floor(indicator[i] * self.G) == 0:
+                mask[i] = 0
+                self.group_size[0] += 1
+            elif math.ceil(indicator[i] * self.G) == self.G:
+                mask[i] = self.G - 1
+                self.group_size[-1] += 1
+            else:
+                mask[i] = math.floor(indicator[i] * self.G) # should be ceil??
+                self.group_size[int(math.floor(indicator[i] * self.G))] += 1
+
+        for i in range(self.G):
+            if i == 0:
+                self.cluster_num[i] = 0
+            elif i == self.G - 1:
+                self.cluster_num[i] = self.output_channels
+            else:
+                self.cluster_num[i] = math.ceil(self.output_channels * math.pow(2, i + 1 - self.T - self.G))
+        self.mask.data = torch.Tensor(mask)
+
+        # Generate corresponding cluster and index.
+        # For kernel number = N: use full_weight rather than cluster&index
+        self.full_weight = nn.Parameter(torch.Tensor(
+            self.output_channels, self.group_size[-1], self.kernel_size, self.kernel_size),requires_grad=True)
+
+        for g in range(1, self.G - 1):
+            if self.group_size[g] == 0:
+                continue
+            else:
+                cluster = nn.Parameter(torch.Tensor(
+                    self.cluster_num[g], self.group_size[g], self.kernel_size, self.kernel_size), requires_grad=True)
+                index = nn.Parameter(torch.zeros(self.output_channels, self.group_size[g]), requires_grad=False)
+                self.__setattr__("clusters_" + str(g), cluster)
+                self.__setattr__("indexs_" + str(g), index)
+
+        # Calculate cluster and index by k-means
+        # First, collect weight corresponding to each group(same kernel number)
+        weight = self.weight.data.cpu().numpy()
+        weight_group = []
+        for g in range(self.G):
+            if self.group_size[g] == 0:
+                weight_group.append([])
+                continue
+            each_weight_group = []
+            for c in range(self.input_channels):
+                if mask[c] == g:
+                    each_weight_group.append(np.expand_dims(weight[:, c], 1))
+            each_weight_group = np.concatenate(each_weight_group, 1)
+            weight_group.append(each_weight_group)
+
+        self.full_weight.data = torch.Tensor(weight_group[-1])
+
+        for g in range(1, self.G - 1):
+            if self.group_size[g] == 0:
+                continue
+            cluster_weight = weight_group[g]
+            cluster_weight = cluster_weight.transpose((1, 0, 2, 3)).reshape((
+                self.group_size[g], self.output_channels, -1))
+
+            clusters = []
+            indexs = []
+            for c in range(cluster_weight.shape[0]):
+                kmean = KMeans(n_clusters=self.cluster_num[g], n_init=10).fit(cluster_weight[c])
+                centroids = kmean.cluster_centers_
+                assignments = kmean.labels_
+
+                clusters.append(np.expand_dims(np.reshape(centroids, [
+                    self.cluster_num[g], self.kernel_size, self.kernel_size]), 1))
+                indexs.append(np.expand_dims(assignments, 1))
+
+            clusters = np.concatenate(clusters, 1)
+            indexs = np.concatenate(indexs, 1)
+
+            self.__getattr__("clusters_"+str(g)).data = torch.Tensor(clusters)
+            self.__getattr__("indexs_"+str(g)).data = torch.Tensor(indexs)
 
     def forward_init(self):
         # record the channel index of each group

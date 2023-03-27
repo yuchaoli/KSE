@@ -87,7 +87,7 @@ if __name__ == "__main__":
                                        pad=0.5, prefix=colorstr('val: '))
 
     # run validation
-    results, _, _ = test(
+    results, _, _, stats = test(
         data_dict,
         batch_size=batch_size,
         imgsz=imgsz_test,

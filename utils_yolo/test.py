@@ -290,6 +290,8 @@ def test(data,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
+    if eval.stats is not None:
+        return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t, eval.stats
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
 
 

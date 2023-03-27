@@ -26,7 +26,7 @@ def KSE(model, G=None, T=None, n=None, pbar=None):
         if is_leaf(child):
             if get_layer_info(child) in ["Conv2d_KSE"]:
                 pbar.set_description(str(child))
-                child.KSE(G=G, T=T)
+                child.KSE_torch(G=G, T=T)
                 pbar.update(1)
         else:
             KSE(child, G=G, T=T, pbar=pbar)
