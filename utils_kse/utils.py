@@ -142,18 +142,6 @@ class Conv2d_KSE(nn.Module):
         # For kernel number = N: use full_weight rather than cluster&index
         self.full_weight = nn.Parameter(torch.Tensor(
             self.output_channels, self.group_size[-1], self.kernel_size, self.kernel_size),requires_grad=True)
-        
-        # save pruning info
-        a = np.array(self.group_size)
-        b = np.array(self.cluster_num)
-        c = (a*b).sum()/(a.sum()*b[-1])
-        with open('info.txt', 'a+') as f:
-            f.write('{:.2f}%\t{}\t{}\n'.format(
-                c*100,
-                self.input_channels,
-                self.output_channels
-            ))
-        #
 
         for g in range(1, self.G - 1):
             if self.group_size[g] == 0:

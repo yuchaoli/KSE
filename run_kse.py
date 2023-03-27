@@ -3,8 +3,6 @@ import os
 os.environ["OMP_NUM_THREADS"] = '1'
 
 import torch
-import torch.nn as nn
-
 import yaml
 import copy
 from fvcore.nn import FlopCountAnalysis, parameter_count_table
@@ -13,7 +11,7 @@ from pathlib import Path
 from utils_yolo.test import test
 from utils_kse import models
 from models.yolo import Model
-from utils_yolo.general import check_dataset, check_img_size, colorstr, labels_to_class_weights
+from utils_yolo.general import check_dataset, check_img_size, colorstr
 from utils_kse.utils import Conv2d_KSE
 from utils_yolo.datasets import create_dataloader
 
@@ -52,6 +50,7 @@ if __name__ == "__main__":
     state_dict = ckpt['model'].float().state_dict()
     model = Model(ckpt['model'].yaml, nc=int(data_dict['nc']), anchors=hyp.get('anchors')).to(device)
     model.load_state_dict(state_dict, strict=False)
+    model.names = names
     del ckpt, state_dict
     
     # KSE
@@ -86,16 +85,6 @@ if __name__ == "__main__":
                                        hyp=hyp, rect=True, 
                                        workers=num_workers,
                                        pad=0.5, prefix=colorstr('val: '))
-    # model params
-    # hyp['box'] *= 3. / nl  # scale to layers
-    # hyp['cls'] *= nc / 80. * 3. / nl  # scale to classes and layers
-    # hyp['obj'] *= (imgsz / 640) ** 2 * 3. / nl  # scale to image size and layers
-    # hyp['label_smoothing'] = 0.0
-    # model.nc = nc  # attach number of classes to model
-    # model.hyp = hyp  # attach hyperparameters to model
-    # model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
-    # model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
-    model.names = names
 
     # run validation
     results, _, _ = test(
