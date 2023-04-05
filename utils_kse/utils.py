@@ -455,3 +455,8 @@ class Conv2d_KSE(nn.Module):
         self.__delattr__("weight")
         # if self.bias is not None:
         #     self.__delattr__("bias")
+
+    def calculate_sparsity(self):
+        num_full = self.cluster_num[-1] * sum(self.group_size)
+        num_kse = sum(a*b for a,b in zip(self.cluster_num, self.group_size))
+        return num_kse, num_full, self.cluster_num, self.group_size

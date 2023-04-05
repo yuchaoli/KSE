@@ -79,3 +79,12 @@ def save(model):
                 # print(child, "save finish!")
         else:
             save(child)
+
+def calculate_sparsity(model, l=[]):
+    for child in model.children():
+        if is_leaf(child):
+            if get_layer_info(child) in ["Conv2d_KSE"]:
+                l.append(child.calculate_sparsity())
+        else:
+            calculate_sparsity(child, l=l)
+    return l
