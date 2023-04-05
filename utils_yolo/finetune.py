@@ -1,12 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision.transforms.functional as TF
+from torch.optim.lr_scheduler import ExponentialLR
+
+import random
 
 from utils_yolo.general import check_img_size, colorstr, labels_to_class_weights
 from utils_yolo.datasets import create_dataloader
 from utils_yolo.autoanchor import check_anchors
 from models.yolo import Model
 from utils_kse import models
+
+
 
 def create_param_groups(model):
     pg0, pg1, pg2 = [], [], []
@@ -81,13 +87,15 @@ def create_param_groups(model):
     return pg0, pg1, pg2
 
 def create_optimizer(model, hyp):
+    
     pg0, pg1, pg2 = create_param_groups(model)
     assert len(pg0) == 55 and len(pg1) == 58*2 and len(pg2) == 58, 'Found {}, {}, {}'.format(len(pg0), len(pg1), len(pg2))
     optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})
     optimizer.add_param_group({'params': pg2})
     del pg0, pg1, pg2
-    return optimizer
+    scheduler = ExponentialLR(optimizer, gamma=0.6)
+    return optimizer, scheduler
 
 def load_model(yolo_struct, nc, anchors, kse_weights, G, T, device):
     model = Model(yolo_struct, nc=nc, anchors=anchors).to(device)
@@ -100,11 +108,11 @@ def load_model(yolo_struct, nc, anchors, kse_weights, G, T, device):
     models.forward_init(model)
     return model.to(device)
 
-def load_data(model, img_size, data_dict, batch_size, hyp, num_workers, device):
+def load_data(model, img_size, data_dict, batch_size, hyp, num_workers, device, augment=True):
     gs = max(int(model.stride.max()), 32)
     imgsz, imgsz_test = [check_img_size(x, gs) for x in img_size]
     dataloader, dataset = create_dataloader(data_dict['train'], imgsz, batch_size, gs, hyp=hyp,
-                                            augment=True,  workers=num_workers, prefix=colorstr('train: '))
+                                            augment=augment,  workers=num_workers, prefix=colorstr('train: '))
     testloader = create_dataloader(data_dict['val'], imgsz_test, batch_size, gs, 
                                         hyp=hyp, rect=True, 
                                         workers=num_workers,
@@ -128,4 +136,24 @@ def load_data(model, img_size, data_dict, batch_size, hyp, num_workers, device):
     check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
 
     return imgsz_test, dataloader, dataset, testloader, hyp, model
-   
+
+###################################################################
+# Failed attempt to torchify augmentation step
+# Does not speedup training on Kaggle
+# Keeping it here for future reference
+###################################################################
+def transform(imgs, targets, hyp, device):
+    imgs = imgs.to(device, non_blocking=True)
+    r = torch.FloatTensor(3).uniform_(-1, 1) * [hyp['hsv_h'], hyp['hsv_s'], hyp['hsv_v']] + [0, 1, 1]
+    imgs = TF.adjust_hue(imgs, r[0])
+    imgs = TF.adjust_saturation(imgs, r[1])
+    imgs = TF.adjust_brightness(imgs, r[2])
+
+    if random.random() < hyp['flipud']:
+        imgs = torch.flipud(imgs)
+        targets[:, 2] = 1 - targets[:, 2]
+    if random.random() < hyp['fliplr']:
+        imgs = torch.fliplr(imgs)
+        targets[:, 1] = 1 - targets[:, 1]
+
+    return imgs, targets.to(device)

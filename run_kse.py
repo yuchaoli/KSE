@@ -77,7 +77,6 @@ if __name__ == "__main__":
 
     # run validation (make sure accuracy is not completely lost)
     gs = max(int(model.stride.max()), 32)
-    nl = model.model[-1].nl
     imgsz, imgsz_test = [check_img_size(x, gs) for x in img_size]
     
     test_path = data_dict['val']

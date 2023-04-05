@@ -14,6 +14,7 @@ import numpy as np
 import yaml
 import copy
 from pathlib import Path
+from time import time
 
 from utils_yolo.test import test
 from utils_kse import models
@@ -21,11 +22,13 @@ from utils_kse import models
 from utils_yolo.general import check_dataset, init_seeds, fitness, increment_path
 from utils_yolo.loss import ComputeLoss
 from utils_yolo.finetune import *
- 
+
+
 validate_before_training = False
 
 # files / dirs
-model_save_location = 'tmp/yolo_kse/model_G3_T0_bias.pth'
+# model_save_location = 'tmp/yolo_kse/model_G3_T0_bias.pth'
+model_save_location = 'best.pth'
 save_dir = Path(increment_path(Path('tmp/yolo_kse/training'), exist_ok=False))
 wdir = save_dir / 'weights'
 last = wdir / 'last.pth'
@@ -41,12 +44,14 @@ G = 3
 T = 0
 
 # training params
-epochs = 1
+lr = 1e-3
+epochs = 10
 batch_size = 16
 num_workers = 4
 img_size = [640, 640]
 nbs = 64 # nominal batch size
 accumulate = max(round(nbs / batch_size), 1)
+
 
 if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -58,6 +63,7 @@ if __name__ == "__main__":
     # check data
     with open(hyp) as f:
         hyp = yaml.load(f, Loader=yaml.SafeLoader)
+        hyp['lr0'] = lr
     with open(data) as f:
         data_dict = yaml.load(f, Loader=yaml.SafeLoader)
     with open(yolo_struct) as f:
@@ -73,7 +79,7 @@ if __name__ == "__main__":
     nb = len(dataloader)        # number of batches
 
     # optimizer
-    optimizer = create_optimizer(model, hyp)
+    optimizer, scheduler = create_optimizer(model, hyp)
 
     # scaler + loss
     scaler = amp.GradScaler(enabled=cuda)
@@ -88,8 +94,6 @@ if __name__ == "__main__":
             data_dict,
             batch_size=batch_size,
             imgsz=imgsz_test,
-            conf_thres=0.001,
-            iou_thres=0.7,
             model=model,
             dataloader=testloader,
             save_dir=save_dir,
@@ -98,10 +102,8 @@ if __name__ == "__main__":
             is_coco=True
         )
         best_fitness = fitness(np.array(results).reshape(1, -1))
-
+        print('Starting fitness:', best_fitness)
     # train loop
-    start_epoch = 0
-    best_fitness = 0.0
     print(('%10s' * 7) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels'))
     for epoch in range(epochs):
         model.train()
@@ -141,19 +143,24 @@ if __name__ == "__main__":
 
             if ix == 10:
                 break
-        # end batch
+            # end batch
+
+        # update learning rate
+        scheduler.step()
+        print('New learning rate: {:.2e}'.format(optimizer.param_groups[0]["lr"]))
 
         # validation
-        # results, maps, times = test(
-        #     data_dict,
-        #     batch_size=batch_size * 2,
-        #     imgsz=imgsz_test,
-        #     model=model,
-        #     dataloader=testloader,
-        #     save_dir=save_dir,
-        #     compute_loss=compute_loss,
-        #     is_coco=True
-        # )
+        results, maps, times = test(
+            data_dict,
+            batch_size=batch_size * 2,
+            imgsz=imgsz_test,
+            model=model,
+            dataloader=testloader,
+            save_dir=save_dir,
+            compute_loss=compute_loss,
+            is_coco=True,
+            plots=False
+        )
 
         # write results to file
         with open(results_file, 'a') as f:
@@ -171,23 +178,21 @@ if __name__ == "__main__":
         torch.save(model_tmp.state_dict(), last)
         if best_fitness == fi:
             torch.save(model_tmp.state_dict(), best)
-    # end batch
+    # end epoch
     
     # test best.pth
-    for m in (last, best) if best.exists() else (last):  # speed, mAP tests
-        results, _, _, stats = test(
-            data_dict,
-            batch_size=batch_size * 2,
-            imgsz=imgsz_test,
-            conf_thres=0.001,
-            iou_thres=0.7,
-            model=load_model(yolo_struct, nc, hyp.get('anchors'), m, G, T, device),
-            dataloader=testloader,
-            save_dir=save_dir,
-            save_json=True,
-            plots=False,
-            is_coco=True
-        )
-        print(stats)
+    results, _, _, stats = test(
+        data_dict,
+        batch_size=batch_size * 2,
+        imgsz=imgsz_test,
+        conf_thres=0.001,
+        iou_thres=0.7,
+        model=load_model(yolo_struct, nc, hyp.get('anchors'), best, G, T, device),
+        dataloader=testloader,
+        save_dir=save_dir,
+        save_json=True,
+        plots=True,
+        is_coco=True
+    )
     torch.cuda.empty_cache()
-#
+    # end __main__
