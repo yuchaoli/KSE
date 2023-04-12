@@ -87,14 +87,13 @@ def create_param_groups(model):
     return pg0, pg1, pg2
 
 def create_optimizer(model, hyp):
-    
     pg0, pg1, pg2 = create_param_groups(model)
     assert len(pg0) == 55 and len(pg1) == 58*2 and len(pg2) == 58, 'Found {}, {}, {}'.format(len(pg0), len(pg1), len(pg2))
     optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})
     optimizer.add_param_group({'params': pg2})
     del pg0, pg1, pg2
-    scheduler = ExponentialLR(optimizer, gamma=0.6)
+    scheduler = ExponentialLR(optimizer, gamma=hyp['lr_gamma'])
     return optimizer, scheduler
 
 def load_model(yolo_struct, nc, anchors, kse_weights, G, T, device):

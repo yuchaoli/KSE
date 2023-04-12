@@ -45,6 +45,7 @@ T = 0
 
 # training params
 lr = 1e-3
+lr_gamma = 0.7
 epochs = 10
 batch_size = 16
 num_workers = 4
@@ -64,6 +65,7 @@ if __name__ == "__main__":
     with open(hyp) as f:
         hyp = yaml.load(f, Loader=yaml.SafeLoader)
         hyp['lr0'] = lr
+        hyp['lr_gamma'] = lr_gamma
     with open(data) as f:
         data_dict = yaml.load(f, Loader=yaml.SafeLoader)
     with open(yolo_struct) as f:
