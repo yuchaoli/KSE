@@ -38,16 +38,19 @@ if __name__ == '__main__':
     # arguments
     opt = dotdict({
         'weights': 'best.pth',
-        'img_size': [480, 640],
+        'onnx_name': 'no_nms.onnx',
+        # 'img_size': [480, 640],
+        'img_size': [640, 640],
         'batch_size': 5,
         'dynamic': False,
         'dynamic_batch': False,
         'grid': True,
         'end2end': True,
         'max_wh': 640,
-        'topk_all': 100,
+        'topk_all': 1000,
         'iou_thres': 0.65,
-        'conf_thres': 0.35,
+        # 'conf_thres': 0.35,
+        'conf_thres': 0.001,
         'simplify': False,
         'include_nms': False,
         'fp16': False,
@@ -83,8 +86,6 @@ if __name__ == '__main__':
                 m.act = Hardswish()
             elif isinstance(m.act, nn.SiLU):
                 m.act = SiLU()
-        # elif isinstance(m, models.yolo.Detect):
-        #     m.forward = m.forward_export  # assign forward (optional)
     model.model[-1].export = not opt.grid  # set Detect() layer grid export
     y = model(img)  # dry run
     if opt.include_nms:
@@ -96,7 +97,7 @@ if __name__ == '__main__':
         import onnx
 
         print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
-        f = opt.weights.replace('.pth', '.onnx')  # filename
+        f = opt.onnx_name if opt.onnx_name else opt.weights.replace('.pth', '.onnx')  # filename
         model.eval()
         output_names = ['classes', 'boxes'] if y is None else ['output']
         dynamic_axes = None
@@ -134,7 +135,7 @@ if __name__ == '__main__':
             else:
                 model.model[-1].concat = True
 
-        torch.onnx.export(model, img, f, verbose=False, opset_version=13, input_names=['images'],
+        torch.onnx.export(model, img, f, verbose=False, opset_version=16, input_names=['images'],
                             output_names=output_names,
                             dynamic_axes=dynamic_axes,
                             do_constant_folding=True)
