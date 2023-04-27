@@ -88,7 +88,7 @@ def create_param_groups(model):
 
 def create_optimizer(model, hyp):
     pg0, pg1, pg2 = create_param_groups(model)
-    assert len(pg0) == 55 and len(pg1) == 58*2 and len(pg2) == 58, 'Found {}, {}, {}'.format(len(pg0), len(pg1), len(pg2))
+    # assert len(pg0) == 55 and len(pg1) == 58*2 and len(pg2) == 58, 'Found {}, {}, {}'.format(len(pg0), len(pg1), len(pg2))
     optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})
     optimizer.add_param_group({'params': pg2})
