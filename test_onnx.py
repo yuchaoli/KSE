@@ -27,10 +27,9 @@ if __name__ == '__main__':
     # Initialize/load model and set device
     training = False
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    onnx_file = 'no_nms.onnx'
+    onnx_file = 'test.onnx'
     data = './data/coco.yaml'
     hyp = './data/hyp.scratch.tiny.yaml'
-    yolo_struct = './data/yolov7_tiny_struct.yaml'
 
     providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
     ort_session = onnxruntime.InferenceSession(onnx_file, providers=providers)
@@ -47,8 +46,6 @@ if __name__ == '__main__':
         hyp = yaml.load(f, Loader=yaml.SafeLoader)
     with open(data) as f:
         data_dict = yaml.load(f, Loader=yaml.SafeLoader)
-    with open(yolo_struct) as f:
-        yolo_struct = yaml.load(f, Loader=yaml.SafeLoader)
     check_dataset(data_dict)
 
     img_size = 640
@@ -76,8 +73,6 @@ if __name__ == '__main__':
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
-        if batch_i > 20:
-            pass
         # img = img.to(device, non_blocking=True)
         img = img / 255.0  # 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)

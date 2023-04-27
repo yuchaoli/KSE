@@ -15,13 +15,12 @@ from utils_yolo.finetune import *
 
 
 # files / dirs
-# model_save_location = 'tmp/yolo_kse/model_G3_T0_bias.pth'
 model_save_location = 'best.pth'
 save_dir = Path(increment_path(Path('tmp/yolo_kse/testing'), exist_ok=False))
 
 data = './data/coco.yaml'
 hyp = './data/hyp.scratch.tiny.yaml'
-yolo_struct = './data/yolov7_tiny_struct_IDetect.yaml'
+yolo_struct = './data/yolov7_tiny_struct.yaml'
 
 # KSE params
 G = 3
@@ -51,7 +50,7 @@ if __name__ == "__main__":
     # load model
     nc = int(data_dict['nc'])   # number of classes
     model = load_model(yolo_struct, nc, hyp.get('anchors'), model_save_location, G, T, device)
-    
+
     # load data
     dataloader = create_dataloader(data_dict['val'], img_size, batch_size, 32, 
                                             hyp=hyp, rect=False, 
@@ -62,7 +61,7 @@ if __name__ == "__main__":
     # run validation
     maps = np.zeros(nc) # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
-    results, _, _, stats = test(
+    results = test(
         data_dict,
         batch_size=batch_size,
         imgsz=img_size,
@@ -73,6 +72,6 @@ if __name__ == "__main__":
         is_coco=True,
         save_json=True,
         iou_thres=0.65
-    )
+    )[0]
     f = fitness(np.array(results).reshape(1, -1))
     print('Fitness:', f)
