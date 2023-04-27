@@ -1,6 +1,5 @@
 # TODO 
 # what happens with qc=0? is num filters or inputs changed?
-# implement attempt_load(file, device)
 
 # coding: utf-8
 import os
@@ -15,20 +14,21 @@ import yaml
 import copy
 from pathlib import Path
 from time import time
+import matplotlib.pyplot as plt
 
 from utils_yolo.test import test
 from utils_kse import models
 
 from utils_yolo.general import check_dataset, init_seeds, fitness, increment_path
-from utils_yolo.loss import ComputeLoss
+from utils_yolo.loss import ComputeLoss, ComputeLossOTA
 from utils_yolo.finetune import *
 
 
-validate_before_training = False
+validate_before_training = True
 
 # files / dirs
-# model_save_location = 'tmp/yolo_kse/model_G3_T0_bias.pth'
-model_save_location = 'best.pth'
+# model_save_location = 'model_G3_T0-tiny-ignore_l1.pth'
+model_save_location = 'model_G3_T0-tiny-57.pth'
 save_dir = Path(increment_path(Path('tmp/yolo_kse/training'), exist_ok=False))
 wdir = save_dir / 'weights'
 last = wdir / 'last.pth'
@@ -44,8 +44,8 @@ G = 3
 T = 0
 
 # training params
-lr = 1e-3
-lr_gamma = 0.7
+lr = 1e-2
+lr_gamma = 0.62
 epochs = 10
 batch_size = 16
 num_workers = 4
@@ -85,26 +85,30 @@ if __name__ == "__main__":
 
     # scaler + loss
     scaler = amp.GradScaler(enabled=cuda)
-    compute_loss = ComputeLoss(model)  # init loss class
+    # compute_loss = ComputeLoss(model)  # init loss class
+    compute_loss = ComputeLossOTA(model)  # init loss class
 
     # run validation before training
     maps = np.zeros(nc) # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     best_fitness = 0
     if validate_before_training:
-        results, _, _ = test(
+        results = test(
             data_dict,
             batch_size=batch_size,
             imgsz=imgsz_test,
             model=model,
             dataloader=testloader,
             save_dir=save_dir,
-            compute_loss=compute_loss,
+            # compute_loss=compute_loss,
             plots=False,
-            is_coco=True
-        )
+            is_coco=True,
+            save_json=False,
+            iou_thres=0.65
+        )[0]
         best_fitness = fitness(np.array(results).reshape(1, -1))
         print('Starting fitness:', best_fitness)
+
     # train loop
     print(('%10s' * 7) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels'))
     for epoch in range(epochs):
@@ -118,12 +122,12 @@ if __name__ == "__main__":
         for i, (imgs, targets, paths, _) in pbar:
             ni = i + nb * epoch
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
-
+            
             # forward pass
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)
-                loss, loss_items = compute_loss(pred, targets.to(device))
-            
+                # loss, loss_items = compute_loss(pred, targets.to(device))
+                loss, loss_items = compute_loss(pred, targets.to(device), imgs)
             # backprop
             scaler.scale(loss).backward()
 
@@ -143,8 +147,8 @@ if __name__ == "__main__":
                 '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0])
             pbar.set_description(s)
 
-            if ix == 10:
-                break
+            # if ix == 10:
+            #     break
             # end batch
 
         # update learning rate
@@ -161,7 +165,8 @@ if __name__ == "__main__":
             save_dir=save_dir,
             compute_loss=compute_loss,
             is_coco=True,
-            plots=False
+            plots=False,
+            iou_thres=0.65
         )
 
         # write results to file
@@ -188,7 +193,7 @@ if __name__ == "__main__":
         batch_size=batch_size * 2,
         imgsz=imgsz_test,
         conf_thres=0.001,
-        iou_thres=0.7,
+        iou_thres=0.65,
         model=load_model(yolo_struct, nc, hyp.get('anchors'), best, G, T, device),
         dataloader=testloader,
         save_dir=save_dir,
