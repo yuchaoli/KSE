@@ -295,7 +295,6 @@ class Conv2d_KSE(nn.Module):
 
     def forward_init(self):
         # record the channel index of each group
-
         full_index = []     # input channels index which kernel number = N
         cluster_indexs = [] # input channels index which kernel number != N && != 0
         all_indexs = []     # input channels index which kernel number != 0
@@ -356,6 +355,50 @@ class Conv2d_KSE(nn.Module):
         mask = self.mask.data.cpu().numpy()
         self.group_size = [0 for i in range(self.G)]
         self.cluster_num = [1 for i in range(self.G)]
+
+        # set removable input channels = removable output channels of prev node
+        self.r_cin = np.where(mask == 0)[0].tolist()
+
+        for i in range(self.input_channels):
+            self.group_size[int(mask[i])] += 1
+
+        for i in range(self.G):
+            if i == 0:
+                self.cluster_num[i] = 0
+            elif i == self.G - 1:
+                self.cluster_num[i] = self.output_channels
+            else:
+                self.cluster_num[i] = math.ceil(self.output_channels * math.pow(2, i + 1 - self.T - self.G))
+
+        self.full_weight = nn.Parameter(
+            torch.Tensor(self.output_channels, self.group_size[-1], self.kernel_size, self.kernel_size),
+            requires_grad=True)
+
+        for g in range(1, self.G - 1):
+            if self.group_size[g] == 0:
+                continue
+            else:
+                cluster = nn.Parameter(torch.zeros(
+                    self.cluster_num[g], self.group_size[g], self.kernel_size, self.kernel_size), requires_grad=True)
+                index = nn.Parameter(torch.ByteTensor(math.ceil(
+                    math.ceil(math.log(self.cluster_num[g], 2)) * self.output_channels * self.group_size[g] / 8)),
+                    requires_grad=False)
+                self.__setattr__("clusters_" + str(g), cluster)
+                self.__setattr__("indexs_" + str(g), index)
+
+    def create_arch2(self, G=None, T=None):
+        if G is not None:
+            self.G = G
+        if T is not None:
+            self.T = T
+
+        # create architecture (clusters and indexs) base on mask
+        mask = self.mask.data.cpu().numpy()
+        self.group_size = [0 for i in range(self.G)]
+        self.cluster_num = [1 for i in range(self.G)]
+
+        # set input channels that should be kept = used output channels of prev node
+        self.keep_cin = np.where(mask != 0)[0].tolist()
 
         for i in range(self.input_channels):
             self.group_size[int(mask[i])] += 1
