@@ -29,7 +29,6 @@ data = './data/coco.yaml'
 hyp = './data/hyp.scratch.tiny.yaml'
 yolo_struct = './data/yolov7_tiny_struct.yaml'
 
-pth_file = 'best.pth'
 G = 3
 T = 0
 
@@ -37,20 +36,21 @@ if __name__ == '__main__':
     t = time.time()
     # arguments
     opt = dotdict({
-        'weights': 'best.pth',
-        'onnx_name': 'no_nms.onnx',
-        # 'img_size': [480, 640],
-        'img_size': [640, 640],
+        'weights': 'best_N18.pth',
+        'onnx_name': 'best_480_640.onnx',
+        'img_size': [480, 640],
+        # 'img_size': [640, 640],
         'batch_size': 5,
         'dynamic': False,
         'dynamic_batch': False,
         'grid': True,
         'end2end': True,
         'max_wh': 640,
-        'topk_all': 1000,
+        'topk_all': 100,
+        # 'topk_all': 1000,
         'iou_thres': 0.65,
-        # 'conf_thres': 0.35,
-        'conf_thres': 0.001,
+        'conf_thres': 0.35,
+        # 'conf_thres': 0.001,
         'simplify': False,
         'include_nms': False,
         'fp16': False,
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # Load PyTorch model
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     nc = int(data_dict['nc']) 
-    model = load_model(yolo_struct, nc, hyp.get('anchors'), pth_file, G, T, device)
+    model = load_model(yolo_struct, nc, hyp.get('anchors'), opt.weights, G, T, device)
     labels = model.names
 
     # Checks
@@ -151,15 +151,6 @@ if __name__ == '__main__':
             for i in onnx_model.graph.output:
                 for j in i.type.tensor_type.shape.dim:
                     j.dim_param = str(shapes.pop(0))
-
-        # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
-
-        # # Metadata
-        # d = {'stride': int(max(model.stride))}
-        # for k, v in d.items():
-        #     meta = onnx_model.metadata_props.add()
-        #     meta.key, meta.value = k, str(v)
-        # onnx.save(onnx_model, f)
 
         if opt.simplify:
             try:
