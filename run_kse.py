@@ -28,8 +28,9 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 plots = True
 
 # KSE params
-G = 2
+G = 3
 T = 0
+ignore_first_layer = False  # NOTE: This does not do anything, only here to make sure hardcoded stuff in yolo.py::parse_model() is not forgotten
 
 save_dir = Path('tmp/yolo_kse')
 os.makedirs(save_dir, exist_ok=True)
@@ -70,11 +71,6 @@ if __name__ == "__main__":
         print('Total FLOPs: {}M'.format(round(flops.by_module()[''] / 1e6)))
         print(parameter_count_table(model))
 
-    # save model (so that yolo_train_kse.py can import it and train/finetune)
-    model_tmp = copy.deepcopy(model)
-    models.save(model_tmp)    
-    torch.save(model_tmp.state_dict(), os.path.join(save_dir, 'model1.pth'))
-
     # run validation (make sure accuracy is not completely lost)
     gs = max(int(model.stride.max()), 32)
     imgsz, imgsz_test = [check_img_size(x, gs) for x in img_size]
@@ -103,4 +99,4 @@ if __name__ == "__main__":
     # save model (so that yolo_train_kse.py can import it and train/finetune)
     model_tmp = copy.deepcopy(model)
     models.save(model_tmp)    
-    torch.save(model_tmp.state_dict(), os.path.join(save_dir, 'model2.pth'))
+    torch.save(model_tmp.state_dict(), os.path.join(save_dir, 'model.pth'))

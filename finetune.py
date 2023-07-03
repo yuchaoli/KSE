@@ -13,27 +13,25 @@ import numpy as np
 import yaml
 import copy
 from pathlib import Path
-from time import time
-import matplotlib.pyplot as plt
 
 from utils_yolo.test import test
 from utils_kse import models
 
 from utils_yolo.general import check_dataset, init_seeds, fitness, increment_path
-from utils_yolo.loss import ComputeLoss, ComputeLossOTA
+from utils_yolo.loss import ComputeLossOTA
 from utils_yolo.finetune import *
 
 
-validate_before_training = True
+validate_before_training = False
 
 # files / dirs
-# model_save_location = 'model_G3_T0-tiny-ignore_l1.pth'
-model_save_location = 'model_G3_T0-tiny-57.pth'
-save_dir = Path(increment_path(Path('tmp/yolo_kse/training'), exist_ok=False))
+compressed_model = 'KSE_3_0.pth'
+save_dir = Path(increment_path(Path('tmp/testing/training'), exist_ok=False))
 wdir = save_dir / 'weights'
 last = wdir / 'last.pth'
 best = wdir / 'best.pth'
 results_file = save_dir / 'results.txt'
+loss_file = save_dir / 'losses.txt'
 
 data = './data/coco.yaml'
 hyp = './data/hyp.scratch.tiny.yaml'
@@ -44,9 +42,7 @@ G = 3
 T = 0
 
 # training params
-lr = 1e-2
-lr_gamma = 0.62
-epochs = 10
+epochs = 15
 batch_size = 16
 num_workers = 4
 img_size = [640, 640]
@@ -64,8 +60,6 @@ if __name__ == "__main__":
     # check data
     with open(hyp) as f:
         hyp = yaml.load(f, Loader=yaml.SafeLoader)
-        hyp['lr0'] = lr
-        hyp['lr_gamma'] = lr_gamma
     with open(data) as f:
         data_dict = yaml.load(f, Loader=yaml.SafeLoader)
     with open(yolo_struct) as f:
@@ -74,9 +68,10 @@ if __name__ == "__main__":
 
     # load model
     nc = int(data_dict['nc'])   # number of classes
-    model = load_model(yolo_struct, nc, hyp.get('anchors'), model_save_location, G, T, device)
+    model = load_model(yolo_struct, nc, hyp.get('anchors'), compressed_model, G, T, device)
     
     # load data
+    data_dict['train'] = data_dict['val'] # for testing (reduces load time)
     imgsz_test, dataloader, dataset, testloader, hyp, model = load_data(model, img_size, data_dict, batch_size, hyp, num_workers, device)
     nb = len(dataloader)        # number of batches
 
@@ -85,7 +80,6 @@ if __name__ == "__main__":
 
     # scaler + loss
     scaler = amp.GradScaler(enabled=cuda)
-    # compute_loss = ComputeLoss(model)  # init loss class
     compute_loss = ComputeLossOTA(model)  # init loss class
 
     # run validation before training
@@ -110,7 +104,13 @@ if __name__ == "__main__":
         print('Starting fitness:', best_fitness)
 
     # train loop
-    print(('%10s' * 7) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels'))
+    l_file = open(loss_file, 'w')
+    l_file.write(('{:>10s}' * 6 + '\n').format('epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total'))
+    with open(results_file, 'a') as r_file:
+            r_file.write(('{:>10s}'*11 + '\n').format('epoch', 'mp', 'mr', 'mAP50', 'mAP', 'box', 'obj', 'cls', 'mAP[0]', 'fitness', 'new_lr'))
+            
+
+    print(('{:>10s}' * 7).format('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels'))
     for epoch in range(epochs):
         model.train()
 
@@ -126,7 +126,6 @@ if __name__ == "__main__":
             # forward pass
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)
-                # loss, loss_items = compute_loss(pred, targets.to(device))
                 loss, loss_items = compute_loss(pred, targets.to(device), imgs)
             # backprop
             scaler.scale(loss).backward()
@@ -147,13 +146,20 @@ if __name__ == "__main__":
                 '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0])
             pbar.set_description(s)
 
-            # if ix == 10:
-            #     break
+            # save losses each nominal batch
+            if ni % accumulate == 0:
+                s = ('%10s' * 2 + '%10.4g' * 4 + '\n') % (
+                '%g/%g' % (epoch, epochs - 1), mem, *loss_items)
+                l_file.write(s)
+
+            if ix == 3:
+                break
             # end batch
 
         # update learning rate
         scheduler.step()
-        print('New learning rate: {:.2e}'.format(optimizer.param_groups[0]["lr"]))
+        new_lr = optimizer.param_groups[0]["lr"]
+        print('New learning rate: {:.2e}'.format(new_lr))
 
         # validation
         results, maps, times = test(
@@ -169,16 +175,16 @@ if __name__ == "__main__":
             iou_thres=0.65
         )
 
-        # write results to file
-        with open(results_file, 'a') as f:
-            f.write(s + '%10.4g' * 7 % results + '\n')  # append metrics, val_loss
-
         # update best fitness
         fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
         if fi > best_fitness:
             best_fitness = fi
             print('Found higher fitness:', best_fitness)
 
+        # write results to file
+        with open(results_file, 'a') as f:
+            f.write(('{:7d}/{:2d}' + '{:10.4g}'*9 + '{:10.2e}\n').format(epoch, epochs-1, *results, maps[0], fi[0], new_lr)) # append metrics, val_loss
+        
         # save last + best
         model_tmp = copy.deepcopy(model)
         models.save(model_tmp)    
@@ -186,7 +192,9 @@ if __name__ == "__main__":
         if best_fitness == fi:
             torch.save(model_tmp.state_dict(), best)
     # end epoch
-    
+
+    l_file.close()
+
     # test best.pth
     results, _, _, stats = test(
         data_dict,

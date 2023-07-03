@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms.functional as TF
-from torch.optim.lr_scheduler import ExponentialLR
+from torch.optim.lr_scheduler import LambdaLR
 
 import random
 
-from utils_yolo.general import check_img_size, colorstr, labels_to_class_weights
+from utils_yolo.general import check_img_size, colorstr, labels_to_class_weights, one_cycle
 from utils_yolo.datasets import create_dataloader
 from utils_yolo.autoanchor import check_anchors
 from models.yolo import Model
@@ -93,7 +93,9 @@ def create_optimizer(model, hyp):
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})
     optimizer.add_param_group({'params': pg2})
     del pg0, pg1, pg2
-    scheduler = ExponentialLR(optimizer, gamma=hyp['lr_gamma'])
+    # scheduler = ExponentialLR(optimizer, gamma=hyp['lr_gamma'])
+    lf = lambda x: one_cycle(1, hyp['lrf'], hyp['one_cyle_epochs'])(x+hyp['start_epoch'])
+    scheduler = LambdaLR(optimizer, lr_lambda=lf)
     return optimizer, scheduler
 
 def load_model(yolo_struct, nc, anchors, kse_weights, G, T, device):

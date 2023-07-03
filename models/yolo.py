@@ -773,8 +773,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             # use KSE except for first layer
             if m == Conv:
                 m = Conv_KSE
-                if c1 == 3:
-                    m = Conv
+                # if c1 == 3:
+                #     m = Conv
 
             args = [c1, c2, *args[1:]]
             if m in [DownC, SPPCSPC, GhostSPPCSPC, 
